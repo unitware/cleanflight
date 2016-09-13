@@ -14,6 +14,7 @@
 #include "common/maths.h"
 
 #include "config/parameter_group.h"
+#include "config/feature.h"
 
 #include "drivers/system.h"
 #include "drivers/sensor.h"
@@ -23,13 +24,15 @@
 #include "rx/rx.h"
 #include "rx/msp.h"
 
+#include "fc/fc_serial.h"
+
 #include "io/motor_and_servo.h"
-#include "io/rc_controls.h"
 #include "io/gps.h"
 #include "io/gimbal.h"
 #include "io/serial.h"
 
 #include "sensors/sensors.h"
+#include "../sensors/amperage.h"
 #include "sensors/battery.h"
 #include "sensors/acceleration.h"
 
@@ -42,10 +45,9 @@
 #include "telemetry/telemetry.h"
 #include "telemetry/smartport.h"
 
-#include "config/runtime_config.h"
-#include "config/config.h"
+#include "fc/runtime_config.h"
+#include "fc/config.h"
 
-#include "config/feature.h"
 
 enum
 {
@@ -239,18 +241,20 @@ bool isSmartPortTimedOut(void)
     return smartPortState >= SPSTATE_TIMEDOUT;
 }
 
-void checkSmartPortTelemetryState(void)
+bool checkSmartPortTelemetryState(void)
 {
     bool newTelemetryEnabledValue = telemetryDetermineEnabledState(smartPortPortSharing);
 
     if (newTelemetryEnabledValue == smartPortTelemetryEnabled) {
-        return;
+        return false;
     }
 
     if (newTelemetryEnabledValue)
         configureSmartPortTelemetryPort();
     else
         freeSmartPortTelemetryPort();
+
+    return true;
 }
 
 void handleSmartPortTelemetry(void)
@@ -312,8 +316,10 @@ void handleSmartPortTelemetry(void)
                 }
                 break;
             case FSSP_DATAID_CURRENT    :
-                if (feature(FEATURE_CURRENT_METER)) {
-                    smartPortSendPackage(id, amperage / 10); // given in 10mA steps, unknown requested unit
+                if (feature(FEATURE_AMPERAGE_METER)) {
+                    amperageMeter_t *state = getAmperageMeter(batteryConfig()->amperageMeterSource);
+
+                    smartPortSendPackage(id, state->amperage / 10); // given in 10mA steps, unknown requested unit
                     smartPortHasRequest = 0;
                 }
                 break;
@@ -325,8 +331,9 @@ void handleSmartPortTelemetry(void)
                 }
                 break;
             case FSSP_DATAID_FUEL       :
-                if (feature(FEATURE_CURRENT_METER)) {
-                    smartPortSendPackage(id, mAhDrawn); // given in mAh, unknown requested unit
+                if (feature(FEATURE_AMPERAGE_METER)) {
+                    amperageMeter_t *state = getAmperageMeter(batteryConfig()->amperageMeterSource);
+                    smartPortSendPackage(id, state->mAhDrawn); // given in mAh, unknown requested unit
                     smartPortHasRequest = 0;
                 }
                 break;
@@ -388,34 +395,34 @@ void handleSmartPortTelemetry(void)
                 // the Taranis seems to consider this number a signed 16 bit integer
 
                 if (ARMING_FLAG(OK_TO_ARM))
-                    tmpi += 1;
+                    tmpi |= 1;
                 if (ARMING_FLAG(PREVENT_ARMING))
-                    tmpi += 2;
+                    tmpi |= 2;
                 if (ARMING_FLAG(ARMED))
-                    tmpi += 4;
+                    tmpi |= 4;
 
                 if (FLIGHT_MODE(ANGLE_MODE))
-                    tmpi += 10;
+                    tmpi |= 10;
                 if (FLIGHT_MODE(HORIZON_MODE))
-                    tmpi += 20;
-                if (FLIGHT_MODE(UNUSED_MODE))
-                    tmpi += 40;
+                    tmpi |= 20;
+                if (FLIGHT_MODE(GTUNE_MODE))
+                    tmpi |= 40;
                 if (FLIGHT_MODE(PASSTHRU_MODE))
-                    tmpi += 40;
+                    tmpi |= 40;
 
                 if (FLIGHT_MODE(MAG_MODE))
-                    tmpi += 100;
+                    tmpi |= 100;
                 if (FLIGHT_MODE(BARO_MODE))
-                    tmpi += 200;
+                    tmpi |= 200;
                 if (FLIGHT_MODE(SONAR_MODE))
-                    tmpi += 400;
+                    tmpi |= 400;
 
                 if (FLIGHT_MODE(GPS_HOLD_MODE))
-                    tmpi += 1000;
+                    tmpi |= 1000;
                 if (FLIGHT_MODE(GPS_HOME_MODE))
-                    tmpi += 2000;
+                    tmpi |= 2000;
                 if (FLIGHT_MODE(HEADFREE_MODE))
-                    tmpi += 4000;
+                    tmpi |= 4000;
 
                 smartPortSendPackage(id, (uint32_t)tmpi);
                 smartPortHasRequest = 0;

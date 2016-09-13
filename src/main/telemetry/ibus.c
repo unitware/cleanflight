@@ -41,7 +41,7 @@
 #include "drivers/serial.h"
 
 #include "io/serial.h"
-#include "io/rc_controls.h"
+#include "fc/rc_controls.h"
 
 #include "sensors/sensors.h"
 #include "sensors/acceleration.h"
@@ -51,7 +51,6 @@
 #include "telemetry/telemetry.h"
 #include "telemetry/ibus.h"
 
-#include "mw.h"
 
 /*
  * iBus Telemetry is a half-duplex serial protocol. It shares 1 line for
@@ -342,11 +341,11 @@ void handleIbusTelemetry(void) {
     }
 }
 
-void checkIbusTelemetryState(void) {
+bool checkIbusTelemetryState(void) {
     bool newTelemetryEnabledValue = telemetryDetermineEnabledState(ibusPortSharing);
 
     if (newTelemetryEnabledValue == ibusTelemetryEnabled) {
-        return;
+        return false;
     }
 
     if (newTelemetryEnabledValue) {
@@ -354,6 +353,8 @@ void checkIbusTelemetryState(void) {
     } else {
         freeIbusTelemetryPort();
     }
+
+    return true;
 }
 
 void configureIbusTelemetryPort(void) {
