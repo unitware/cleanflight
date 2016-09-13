@@ -191,14 +191,16 @@ typedef enum {
     IBUS_SENSOR_TYPE_INTERNAL_VOLTAGE = 0x00,
     IBUS_SENSOR_TYPE_TEMPERATURE      = 0x01,
     IBUS_SENSOR_TYPE_RPM              = 0x02,
-    IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE = 0x03
+    IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE = 0x03,
+	IBUS_SENSOR_TYPE_TEST_VIRTUAL_SENSOR = 0x04
 } ibusSensorType_e;
 
 static const uint8_t SENSOR_ADDRESS_TYPE_LOOKUP[] = {
     // IBUS_SENSOR_TYPE_INTERNAL_VOLTAGE,  // Address 0, not usable since it is reserved for internal voltage
     IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE,  // Address 1, VBAT
     IBUS_SENSOR_TYPE_TEMPERATURE,       // Address 2, Gyro Temp
-    IBUS_SENSOR_TYPE_RPM                // Address 3, Throttle command
+    IBUS_SENSOR_TYPE_RPM,                // Address 3, Throttle command
+    IBUS_SENSOR_TYPE_TEST_VIRTUAL_SENSOR // Address 4, Test Virtual Sensor
 };
 
 static serialPort_t *ibusSerialPort = NULL;
@@ -264,30 +266,34 @@ static ibusAddress_t getAddress(uint8_t ibusPacket[static IBUS_MIN_LEN]) {
 
 static void dispatchMeasurementRequest(ibusAddress_t address) {
     switch (SENSOR_ADDRESS_TYPE_LOOKUP[address - ibusBaseAddress]) {
-    case IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE:
-        {
+        case IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE: {
             uint16_t value = vbat * 10;
             if (ibusTelemetryConfig()->report_cell_voltage) {
                 value /= batteryCellCount;
             }
             sendIbusMeasurement(address, value);
+            break;
         }
-        break;
 
-    case IBUS_SENSOR_TYPE_TEMPERATURE:
-        {
+        case IBUS_SENSOR_TYPE_TEMPERATURE: {
             #ifdef BARO
                 float temperature = (baroTemperature + 50) / 100.f;
             #else
                 float temperature = telemTemperature1 / 10.f;
             #endif
             sendIbusMeasurement(address, (uint16_t) ((temperature + 40)*10));
+             break;
         }
-        break;
 
-    case IBUS_SENSOR_TYPE_RPM:
-        sendIbusMeasurement(address, (uint16_t) rcCommand[THROTTLE]);
-        break;
+        case IBUS_SENSOR_TYPE_RPM: {
+            sendIbusMeasurement(address, (uint16_t) rcCommand[THROTTLE]);
+            break;
+        }
+        
+        case IBUS_SENSOR_TYPE_TEST_VIRTUAL_SENSOR: {
+			sendIbusMeasurement(address, (uint16_t)1024);
+			break;
+		}
     }
 }
 
