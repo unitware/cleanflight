@@ -40,8 +40,12 @@
 #include "drivers/accgyro.h"
 #include "drivers/serial.h"
 
+#include "sensors/sensors.h"
+#include "sensors/acceleration.h"
+
 #include "io/serial.h"
 #include "fc/rc_controls.h"
+#include "fc/cleanflight_fc.h"
 
 #include "sensors/sensors.h"
 #include "sensors/acceleration.h"
