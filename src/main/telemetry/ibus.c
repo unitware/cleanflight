@@ -198,8 +198,7 @@ static const uint8_t SENSOR_ADDRESS_TYPE_LOOKUP[] = {
     // IBUS_SENSOR_TYPE_INTERNAL_VOLTAGE,  // Address 0, not usable since it is reserved for internal voltage
     IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE,  // Address 1, VBAT
     IBUS_SENSOR_TYPE_TEMPERATURE,       // Address 2, Gyro Temp
-    IBUS_SENSOR_TYPE_RPM,                // Address 3, Throttle command
-    IBUS_SENSOR_TYPE_TEST_VIRTUAL_SENSOR // Address 4, Test Virtual Sensor
+    IBUS_SENSOR_TYPE_RPM                // Address 3, Throttle command
 };
 
 static serialPort_t *ibusSerialPort = NULL;
@@ -288,12 +287,6 @@ static void dispatchMeasurementRequest(ibusAddress_t address) {
             sendIbusMeasurement(address, (uint16_t) rcCommand[THROTTLE]);
             break;
         }
-        
-        case IBUS_SENSOR_TYPE_TEST_VIRTUAL_SENSOR: {
-			sendIbusMeasurement(address, (uint16_t)1024);
-			break;
-		}
-    }
 }
 
 static void respondToIbusRequest(uint8_t ibusPacket[static IBUS_RX_BUF_LEN]) {
