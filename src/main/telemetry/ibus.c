@@ -267,31 +267,29 @@ static ibusAddress_t getAddress(uint8_t ibusPacket[static IBUS_MIN_LEN]) {
 
 static void dispatchMeasurementRequest(ibusAddress_t address) {
     switch (SENSOR_ADDRESS_TYPE_LOOKUP[address - ibusBaseAddress]) {
-    case IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE:
-        {
+        case IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE: {
             uint16_t value = vbat * 10;
             if (ibusTelemetryConfig()->report_cell_voltage) {
                 value /= batteryCellCount;
             }
             sendIbusMeasurement(address, value);
+            break;
         }
-        break;
 
-    case IBUS_SENSOR_TYPE_TEMPERATURE:
-        {
+        case IBUS_SENSOR_TYPE_TEMPERATURE: {
             #ifdef BARO
                 float temperature = (baroTemperature + 50) / 100.f;
             #else
                 float temperature = telemTemperature1 / 10.f;
             #endif
             sendIbusMeasurement(address, (uint16_t) ((temperature + 40)*10));
+             break;
         }
-        break;
 
-    case IBUS_SENSOR_TYPE_RPM:
-        sendIbusMeasurement(address, (uint16_t) rcCommand[THROTTLE]);
-        break;
-    }
+        case IBUS_SENSOR_TYPE_RPM: {
+            sendIbusMeasurement(address, (uint16_t) rcCommand[THROTTLE]);
+            break;
+        }
 }
 
 static void respondToIbusRequest(uint8_t ibusPacket[static IBUS_RX_BUF_LEN]) {
