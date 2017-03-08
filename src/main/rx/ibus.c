@@ -53,17 +53,27 @@
 #define IBUS_FRAME_GAP 500
 
 #define IBUS_BAUDRATE 115200
+#define IBUS_TELEMETRY_PACKET_LENGTH (4)
+#define IBUS_SERIAL_RX_PACKET_LENGTH (32)
 
 static uint8_t ibusModel;
 static uint8_t ibusSyncByte = 0;
 static uint8_t ibusFrameSize;
 static uint8_t ibusChannelOffset;
+static uint8_t rxBytesToIgnore;
 static uint16_t ibusChecksum;
 
 static bool ibusFrameDone = false;
 static uint32_t ibusChannelData[IBUS_MAX_CHANNEL];
 
 static uint8_t ibus[IBUS_BUFFSIZE] = { 0, };
+
+
+static bool isValidIbusPacketLength(uint8_t length)
+{
+    return (length == IBUS_TELEMETRY_PACKET_LENGTH) || (length == IBUS_SERIAL_RX_PACKET_LENGTH);
+}
+
 
 // Receive ISR callback
 static void ibusDataReceive(uint16_t c)
@@ -74,28 +84,31 @@ static void ibusDataReceive(uint16_t c)
 
     ibusTime = micros();
 
-    if ((ibusTime - ibusTimeLast) > IBUS_FRAME_GAP)
+    if ((ibusTime - ibusTimeLast) > IBUS_FRAME_GAP) {
         ibusFramePosition = 0;
+        rxBytesToIgnore = 0;
+    }
+
+    if (rxBytesToIgnore) {
+        rxBytesToIgnore--;
+        return;
+    }
 
     ibusTimeLast = ibusTime;
 
     if (ibusFramePosition == 0) {
-        if (ibusSyncByte == 0) {
-            // detect the frame type based on the STX byte.
-            if (c == 0x55) {
-                ibusModel = IBUS_MODEL_IA6;
-                ibusSyncByte = 0x55;
-                ibusFrameSize = 31;
-                ibusChecksum = 0x0000;
-                ibusChannelOffset = 1;
-            } else if (c == 0x20) {
-                ibusModel = IBUS_MODEL_IA6B;
-                ibusSyncByte = 0x20;
-                ibusFrameSize = 32;
-                ibusChannelOffset = 2;
-                ibusChecksum = 0xFFFF;
-            } else
-                return;
+        if (isValidIbusPacketLength(c)) {
+            ibusModel = IBUS_MODEL_IA6B;
+            ibusSyncByte = c;
+            ibusFrameSize = c;
+            ibusChannelOffset = 2;
+            ibusChecksum = 0xFFFF;
+        } else if ((ibusSyncByte == 0) && (c == 0x55)) {
+            ibusModel = IBUS_MODEL_IA6;
+            ibusSyncByte = 0x55;
+            ibusFrameSize = 31;
+            ibusChecksum = 0x0000;
+            ibusChannelOffset = 1;
         } else if (ibusSyncByte != c) {
             return;
         }
@@ -128,25 +141,37 @@ static uint8_t ibusFrameStatus(void)
         for (i = 0, offset = ibusChannelOffset; i < IBUS_MAX_CHANNEL; i++, offset += 2)
             chksum += ibus[offset] + (ibus[offset + 1] << 8);
     } else {
-        for (i = 0; i < 30; i++)
+        for (i = 0; i < ibusFrameSize - IBUS_CHECKSUM_SIZE; i++)
             chksum -= ibus[i];
     }
 
     if (chksum == rxsum) {
-        for (i = 0, offset = ibusChannelOffset; i < IBUS_MAX_CHANNEL; i++, offset += 2) {
-            ibusChannelData[i] = ibus[offset] + (ibus[offset + 1] << 8);
+        if (ibusModel == IBUS_MODEL_IA6 || ibusSyncByte == 0x20) {
+            //serial rx
+            for (i = 0, offset = ibusChannelOffset; i < IBUS_MAX_CHANNEL; i++, offset += 2) {
+                ibusChannelData[i] = ibus[offset] + (ibus[offset + 1] << 8);
+            }
+            frameStatus = RX_FRAME_COMPLETE;
         }
-        frameStatus = RX_FRAME_COMPLETE;
+        else
+        {
+            //telemetry
+#if defined(TELEMETRY) && defined(TELEMETRY_IBUS)
+            rxBytesToIgnore = respondToIbusRequest(ibus);
+#endif
+        }
     }
 
     return frameStatus;
 }
+
 
 static uint16_t ibusReadRawRC(const rxRuntimeConfig_t *rxRuntimeConfig, uint8_t chan)
 {
     UNUSED(rxRuntimeConfig);
     return ibusChannelData[chan];
 }
+
 
 bool ibusInit(const rxConfig_t *rxConfig, rxRuntimeConfig_t *rxRuntimeConfig)
 {
@@ -170,6 +195,8 @@ bool ibusInit(const rxConfig_t *rxConfig, rxRuntimeConfig_t *rxRuntimeConfig)
     bool portShared = false;
 #endif
 
+
+    rxBytesToIgnore = 0;
     serialPort_t *ibusPort = openSerialPort(portConfig->identifier, 
         FUNCTION_RX_SERIAL, 
         ibusDataReceive, 

@@ -405,7 +405,6 @@ TEST_F(IbusRxProtocollUnitTest, Test_IA6_OnePacketReceivedBadCrc)
 }
 
 
-
 TEST_F(IbusRxProtocollUnitTest, Test_IA6B_OnePacketReceived_not_shared_port)
 {
     uint8_t packet[] = {0x20, 0x00, //length and reserved (unknown) bits
@@ -447,3 +446,67 @@ TEST_F(IbusRxProtocollUnitTest, Test_IA6B_OnePacketReceived_not_shared_port)
         ASSERT_EQ(i, rxRuntimeConfig.rcReadRawFn(&rxRuntimeConfig, i));
     }
 }
+
+
+TEST_F(IbusRxProtocollUnitTest, Test_OneTelemetryPacketReceived)
+{
+    uint8_t packet[] = {0x04, 0x81, 0x7a, 0xff}; //ibus sensor discovery 
+    resetStubTelemetry();
+    
+    receivePacket(packet, sizeof(packet));
+
+    //no frame complete signal to rx system, but telemetry system is called
+    EXPECT_EQ(RX_FRAME_PENDING, rxRuntimeConfig.rcFrameStatusFn());
+    EXPECT_TRUE(stubTelemetryCalled);
+    EXPECT_TRUE( 0 == memcmp( stubTelemetryPacket, packet, sizeof(packet)));
+}
+
+
+TEST_F(IbusRxProtocollUnitTest, Test_OneTelemetryIgnoreTxEchoToRx)
+{
+    uint8_t packet[] = {0x04, 0x81, 0x7a, 0xff}; //ibus sensor discovery 
+    resetStubTelemetry();
+    stubTelemetryIgnoreRxChars = 4;
+
+    //given one packet received, that will respond with four characters to be ignored
+    receivePacket(packet, sizeof(packet));
+    rxRuntimeConfig.rcFrameStatusFn();
+    EXPECT_TRUE(stubTelemetryCalled);
+
+    //when those four bytes are sent and looped back 
+    resetStubTelemetry();
+    rxRuntimeConfig.rcFrameStatusFn();
+    receivePacket(packet, sizeof(packet));
+
+    //then they are ignored
+    EXPECT_FALSE(stubTelemetryCalled);
+
+    //and then next packet can be received    
+    receivePacket(packet, sizeof(packet));
+    rxRuntimeConfig.rcFrameStatusFn();
+    EXPECT_TRUE(stubTelemetryCalled);
+}
+
+
+TEST_F(IbusRxProtocollUnitTest, Test_OneTelemetryShouldNotIgnoreTxEchoAfterInterFrameGap)
+{
+    uint8_t packet[] = {0x04, 0x81, 0x7a, 0xff}; //ibus sensor discovery 
+    resetStubTelemetry();
+    stubTelemetryIgnoreRxChars = 4;
+
+    //given one packet received, that will respond with four characters to be ignored
+    receivePacket(packet, sizeof(packet));
+    rxRuntimeConfig.rcFrameStatusFn();
+    EXPECT_TRUE(stubTelemetryCalled);
+
+    //when there is an interPacketGap
+    microseconds_stub_value += 5000;
+    resetStubTelemetry();
+    rxRuntimeConfig.rcFrameStatusFn();
+
+    //then next packet can be received    
+    receivePacket(packet, sizeof(packet));
+    rxRuntimeConfig.rcFrameStatusFn();
+    EXPECT_TRUE(stubTelemetryCalled);
+}
+
