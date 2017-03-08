@@ -50,8 +50,9 @@
 #include "fc/rc_controls.h"
 #include "scheduler/scheduler.h"
 
-#include "telemetry/telemetry.h"
 #include "telemetry/ibus.h"
+#include "telemetry/ibus_shared.h"
+#include "telemetry/telemetry.h"
 
 /*
  * iBus Telemetry is a half-duplex serial protocol. It shares 1 line for
@@ -173,37 +174,11 @@ PG_RESET_TEMPLATE(ibusTelemetryConfig_t, ibusTelemetryConfig,
 #define IBUS_BAUDRATE      (115200)
 #define IBUS_CYCLE_TIME_MS (8)
 
-#define IBUS_CHECKSUM_SIZE (2)
-
 #define IBUS_MIN_LEN       (2 + IBUS_CHECKSUM_SIZE)
 #define IBUS_MAX_TX_LEN    (6)
 #define IBUS_MAX_RX_LEN    (4)
 #define IBUS_RX_BUF_LEN    (IBUS_MAX_RX_LEN)
 
-#define IBUS_TEMPERATURE_OFFSET  (400)
-
-
-typedef uint8_t ibusAddress_t;
-
-typedef enum {
-    IBUS_COMMAND_DISCOVER_SENSOR      = 0x80,
-    IBUS_COMMAND_SENSOR_TYPE          = 0x90,
-    IBUS_COMMAND_MEASUREMENT          = 0xA0
-} ibusCommand_e;
-
-typedef enum {
-    IBUS_SENSOR_TYPE_TEMPERATURE      = 0x01,
-    IBUS_SENSOR_TYPE_RPM              = 0x02,
-    IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE = 0x03
-} ibusSensorType_e;
-
-/* Address lookup relative to the sensor base address which is the lowest address seen by the FC
-   The actual lowest value is likely to change when sensors are daisy chained */
-static const uint8_t sensorAddressTypeLookup[] = {
-    IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE,
-    IBUS_SENSOR_TYPE_TEMPERATURE,
-    IBUS_SENSOR_TYPE_RPM
-};
 
 static serialPort_t *ibusSerialPort = NULL;
 static serialPortConfig_t *ibusSerialPortConfig;
@@ -215,131 +190,8 @@ static uint8_t outboundBytesToIgnoreOnRxCount = 0;
 static bool ibusTelemetryEnabled = false;
 static portSharing_e ibusPortSharing;
 
-#define INVALID_IBUS_ADDRESS 0
-static ibusAddress_t ibusBaseAddress = INVALID_IBUS_ADDRESS;
-
 static uint8_t ibusReceiveBuffer[IBUS_RX_BUF_LEN] = { 0x0 };
 
-static uint16_t calculateChecksum(const uint8_t *ibusPacket, size_t packetLength)
-{
-    uint16_t checksum = 0xFFFF;
-    for (size_t i = 0; i < packetLength - IBUS_CHECKSUM_SIZE; i++) {
-        checksum -= ibusPacket[i];
-    }
-
-    return checksum;
-}
-
-static bool isChecksumOk(const uint8_t *ibusPacket)
-{
-    uint16_t calculatedChecksum = calculateChecksum(ibusReceiveBuffer, IBUS_RX_BUF_LEN);
-
-    // Note that there's a byte order swap to little endian here
-    return (calculatedChecksum >> 8) == ibusPacket[IBUS_RX_BUF_LEN - 1]
-           && (calculatedChecksum & 0xFF) == ibusPacket[IBUS_RX_BUF_LEN - 2];
-}
-
-static void transmitIbusPacket(uint8_t *ibusPacket, size_t payloadLength)
-{
-    uint16_t checksum = calculateChecksum(ibusPacket, payloadLength + IBUS_CHECKSUM_SIZE);
-    for (size_t i = 0; i < payloadLength; i++) {
-        serialWrite(ibusSerialPort, ibusPacket[i]);
-    }
-    serialWrite(ibusSerialPort, checksum & 0xFF);
-    serialWrite(ibusSerialPort, checksum >> 8);
-    outboundBytesToIgnoreOnRxCount += payloadLength + IBUS_CHECKSUM_SIZE;
-}
-
-static void sendIbusDiscoverSensorReply(ibusAddress_t address)
-{
-    uint8_t sendBuffer[] = { 0x04, IBUS_COMMAND_DISCOVER_SENSOR | address};
-    transmitIbusPacket(sendBuffer, sizeof(sendBuffer));
-}
-
-static void sendIbusSensorType(ibusAddress_t address)
-{
-    uint8_t sendBuffer[] = {0x06,
-                            IBUS_COMMAND_SENSOR_TYPE | address,
-                            sensorAddressTypeLookup[address - ibusBaseAddress],
-                            0x02
-                           };
-    transmitIbusPacket(sendBuffer, sizeof(sendBuffer));
-}
-
-static void sendIbusMeasurement(ibusAddress_t address, uint16_t measurement)
-{
-    uint8_t sendBuffer[] = { 0x06, IBUS_COMMAND_MEASUREMENT | address, measurement & 0xFF, measurement >> 8};
-    transmitIbusPacket(sendBuffer, sizeof(sendBuffer));
-}
-
-static bool isCommand(ibusCommand_e expected, const uint8_t *ibusPacket)
-{
-    return (ibusPacket[1] & 0xF0) == expected;
-}
-
-static ibusAddress_t getAddress(const uint8_t *ibusPacket)
-{
-    return (ibusPacket[1] & 0x0F);
-}
-
-static void dispatchMeasurementReply(ibusAddress_t address)
-{
-    int value;
-
-    switch (sensorAddressTypeLookup[address - ibusBaseAddress]) {
-    case IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE:
-        value = getVbat() * 10;
-        if (ibusTelemetryConfig()->report_cell_voltage) {
-            value /= batteryCellCount;
-        }
-        sendIbusMeasurement(address, value);
-        break;
-
-    case IBUS_SENSOR_TYPE_TEMPERATURE:
-        #ifdef BARO
-            value = (baro.baroTemperature + 5) / 10; // +5 to make integer division rounding correct
-        #else
-            value = telemTemperature1 * 10;
-        #endif
-        sendIbusMeasurement(address, value + IBUS_TEMPERATURE_OFFSET);
-        break;
-
-    case IBUS_SENSOR_TYPE_RPM:
-        sendIbusMeasurement(address, (uint16_t) rcCommand[THROTTLE]);
-        break;
-    }
-}
-
-static void autodetectFirstReceivedAddressAsBaseAddress(ibusAddress_t returnAddress)
-{
-    if ((INVALID_IBUS_ADDRESS == ibusBaseAddress) &&
-        (INVALID_IBUS_ADDRESS != returnAddress)) {
-        ibusBaseAddress = returnAddress;
-    }
-}
-
-static bool theAddressIsWithinOurRange(ibusAddress_t returnAddress)
-{
-    return (returnAddress >= ibusBaseAddress) &&
-           (ibusAddress_t)(returnAddress - ibusBaseAddress) < ARRAYLEN(sensorAddressTypeLookup);
-}
-
-static void respondToIbusRequest(uint8_t ibusPacket[static IBUS_RX_BUF_LEN])
-{
-    ibusAddress_t returnAddress = getAddress(ibusPacket);
-
-    autodetectFirstReceivedAddressAsBaseAddress(returnAddress);
-
-    if (theAddressIsWithinOurRange(returnAddress)) {
-        if (isCommand(IBUS_COMMAND_DISCOVER_SENSOR, ibusPacket)) {
-            sendIbusDiscoverSensorReply(returnAddress);
-        } else if (isCommand(IBUS_COMMAND_SENSOR_TYPE, ibusPacket)) {
-            sendIbusSensorType(returnAddress);
-        } else if (isCommand(IBUS_COMMAND_MEASUREMENT, ibusPacket)) {
-            dispatchMeasurementReply(returnAddress);
-        }
-    }
-}
 
 static void pushOntoTail(uint8_t buffer[IBUS_MIN_LEN], size_t bufferLength, uint8_t value)
 {
@@ -347,12 +199,14 @@ static void pushOntoTail(uint8_t buffer[IBUS_MIN_LEN], size_t bufferLength, uint
     ibusReceiveBuffer[bufferLength - 1] = value;
 }
 
+
 void initIbusTelemetry(void)
 {
     ibusSerialPortConfig = findSerialPortConfig(FUNCTION_TELEMETRY_IBUS);
     ibusPortSharing = determinePortSharing(ibusSerialPortConfig, FUNCTION_TELEMETRY_IBUS);
-    ibusBaseAddress = INVALID_IBUS_ADDRESS;
+    ibusTelemetryEnabled = false;
 }
+
 
 void handleIbusTelemetry(void)
 {
@@ -370,11 +224,12 @@ void handleIbusTelemetry(void)
 
         pushOntoTail(ibusReceiveBuffer, IBUS_RX_BUF_LEN, c);
 
-        if (isChecksumOk(ibusReceiveBuffer)) {
-            respondToIbusRequest(ibusReceiveBuffer);
+        if (isChecksumOk(ibusReceiveBuffer, IBUS_RX_BUF_LEN)) {
+            outboundBytesToIgnoreOnRxCount += respondToIbusRequest(ibusReceiveBuffer);
         }
     }
 }
+
 
 bool checkIbusTelemetryState(void)
 {
@@ -394,32 +249,34 @@ bool checkIbusTelemetryState(void)
     return true;
 }
 
+
 void configureIbusTelemetryPort(void)
 {
-    portOptions_t portOptions;
-
     if (!ibusSerialPortConfig) {
         return;
     }
 
-    portOptions = SERIAL_BIDIR;
+    if (isSerialPortShared(ibusSerialPortConfig, FUNCTION_RX_SERIAL, FUNCTION_TELEMETRY_IBUS)) {
+        // serialRx will open port and handle telemetry
+        return;
+    }
 
-    ibusSerialPort = openSerialPort(ibusSerialPortConfig->identifier, FUNCTION_TELEMETRY_IBUS, NULL, IBUS_BAUDRATE,
-                                    IBUS_UART_MODE, portOptions);
+    ibusSerialPort = openSerialPort(ibusSerialPortConfig->identifier, FUNCTION_TELEMETRY_IBUS, NULL, IBUS_BAUDRATE, IBUS_UART_MODE, SERIAL_BIDIR);
 
     if (!ibusSerialPort) {
         return;
     }
 
+    initSharedIbusTelemetry(ibusSerialPort);
     ibusTelemetryEnabled = true;
     outboundBytesToIgnoreOnRxCount = 0;
 }
+
 
 void freeIbusTelemetryPort(void)
 {
     closeSerialPort(ibusSerialPort);
     ibusSerialPort = NULL;
-
     ibusTelemetryEnabled = false;
 }
 
