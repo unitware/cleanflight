@@ -770,14 +770,6 @@ $(OBJECT_DIR)/rx/ibus.o : \
 	@mkdir -p $(dir $@)
 	$(CC) $(C_FLAGS) $(TEST_CFLAGS) -c $(USER_DIR)/rx/ibus.c -o $@
 
-$(OBJECT_DIR)/telemetry/ibus_shared.o : \
-	$(USER_DIR)/telemetry/ibus_shared.c \
-	$(USER_DIR)/telemetry/ibus_shared.h \
-	$(GTEST_HEADERS)
-
-	@mkdir -p $(dir $@)
-	$(CC) $(C_FLAGS) $(TEST_CFLAGS) -c $(USER_DIR)/telemetry/ibus_shared.c -o $@
-
 $(OBJECT_DIR)/rx_ibus_unittest.o : \
 	$(TEST_DIR)/rx_ibus_unittest.cc \
 	$(GTEST_HEADERS)
@@ -788,7 +780,6 @@ $(OBJECT_DIR)/rx_ibus_unittest.o : \
 $(OBJECT_DIR)/rx_ibus_unittest : \
 	$(OBJECT_DIR)/rx_ibus_unittest.o \
 	$(OBJECT_DIR)/rx/ibus.o \
-	$(OBJECT_DIR)/telemetry/ibus_shared.o \
 	$(OBJECT_DIR)/gtest_main.a
 
 	$(CXX) $(CXX_FLAGS) $(PG_FLAGS) $^ -o $(OBJECT_DIR)/$@
@@ -801,6 +792,14 @@ $(OBJECT_DIR)/telemetry/ibus.o : \
 
 	@mkdir -p $(dir $@)
 	$(CC) $(C_FLAGS) $(TEST_CFLAGS) -c $(USER_DIR)/telemetry/ibus.c -o $@
+
+$(OBJECT_DIR)/telemetry/ibus_shared.o : \
+	$(USER_DIR)/telemetry/ibus_shared.c \
+	$(USER_DIR)/telemetry/ibus_shared.h \
+	$(GTEST_HEADERS)
+
+	@mkdir -p $(dir $@)
+	$(CC) $(C_FLAGS) $(TEST_CFLAGS) -c $(USER_DIR)/telemetry/ibus_shared.c -o $@
 
 $(OBJECT_DIR)/telemetry_ibus_unittest.o : \
 	$(TEST_DIR)/telemetry_ibus_unittest.cc \

@@ -43,6 +43,8 @@
 
 #include "rx/rx.h"
 #include "rx/ibus.h"
+#include "telemetry/ibus.h"
+#include "telemetry/ibus_shared.h"
 
 #define IBUS_MAX_CHANNEL 14
 #define IBUS_BUFFSIZE 32
@@ -162,7 +164,8 @@ bool ibusInit(const rxConfig_t *rxConfig, rxRuntimeConfig_t *rxRuntimeConfig)
     }
 
 #ifdef TELEMETRY
-    bool portShared = telemetryCheckRxPortShared(portConfig);
+    // bool portShared = telemetryCheckRxPortShared(portConfig);
+    bool portShared = isSerialPortShared(portConfig, FUNCTION_RX_SERIAL, FUNCTION_TELEMETRY_IBUS);
 #else
     bool portShared = false;
 #endif
@@ -172,15 +175,16 @@ bool ibusInit(const rxConfig_t *rxConfig, rxRuntimeConfig_t *rxRuntimeConfig)
         ibusDataReceive, 
         IBUS_BAUDRATE, 
         portShared ? MODE_RXTX : MODE_RX, 
-        SERIAL_NOT_INVERTED | (rxConfig->halfDuplex ? SERIAL_BIDIR : 0)
+        SERIAL_NOT_INVERTED | (rxConfig->halfDuplex || portShared ? SERIAL_BIDIR : 0)
         );
 
-#ifdef TELEMETRY
+#if defined(TELEMETRY) && defined(TELEMETRY_IBUS)
     if (portShared) {
-        telemetrySharedPort = ibusPort;
-    }
+        initSharedIbusTelemetry(ibusPort);
+    } 
 #endif
 
     return ibusPort != NULL;
 }
-#endif
+
+#endif //SERIAL_RX
