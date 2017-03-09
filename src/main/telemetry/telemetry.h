@@ -24,6 +24,8 @@
 
 #pragma once
 
+#include "io/serial.h"
+
 typedef enum {
     FRSKY_FORMAT_DMS = 0,
     FRSKY_FORMAT_NMEA

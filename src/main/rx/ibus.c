@@ -198,7 +198,7 @@ bool ibusInit(const rxConfig_t *rxConfig, rxRuntimeConfig_t *rxRuntimeConfig)
     rxRuntimeConfig->rcReadRawFn = ibusReadRawRC;
     rxRuntimeConfig->rcFrameStatusFn = ibusFrameStatus;
 
-    const serialPortConfig_t *portConfig = findSerialPortConfig(FUNCTION_RX_SERIAL);
+    serialPortConfig_t *portConfig = findSerialPortConfig(FUNCTION_RX_SERIAL);
     if (!portConfig) {
         return false;
     }

@@ -17,6 +17,8 @@
 
 #pragma once
 
+#define TELEMETRY_IBUS
+
 #define TARGET_CONFIG
 #define USE_HARDWARE_REVISION_DETECTION
 #define TARGET_BUS_INIT

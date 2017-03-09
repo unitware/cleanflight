@@ -108,7 +108,7 @@ bool telemetryDetermineEnabledState(portSharing_e portSharing)
 }
 
 
-bool isSerialPortShared(const serialPortConfig_t *portConfig,
+bool isSerialPortShared(serialPortConfig_t *portConfig,
                         uint16_t functionMask,
                         serialPortFunction_e sharedWithFunction)
 {

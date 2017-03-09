@@ -231,13 +231,13 @@ static uint8_t dispatchMeasurementReply(ibusAddress_t address)
     switch (sensorAddressTypeLookup[address - ibusBaseAddress]) {
     case IBUS_SENSOR_TYPE_EXTERNAL_VOLTAGE:
         value = getVbat() * 10;
-        if (telemetryConfig()->report_cell_voltage) {
+        if (true) {//telemetryConfig()->report_cell_voltage) {
             value /= batteryCellCount;
         }
         return sendIbusMeasurement(address, value);
 
     case IBUS_SENSOR_TYPE_TEMPERATURE:
-        value = gyroGetTemperature() * 10;
+        value = 0; //gyroGetTemperature() * 10;
         return sendIbusMeasurement(address, value + IBUS_TEMPERATURE_OFFSET);
 
     case IBUS_SENSOR_TYPE_RPM:
