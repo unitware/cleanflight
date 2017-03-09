@@ -87,7 +87,7 @@ static bool openSerial_called = false;
 static serialPortStub_t serialWriteStub;
 static bool portIsShared = false;
 
-bool isSerialPortShared(const serialPortConfig_t *portConfig,
+bool isSerialPortShared(serialPortConfig_t *portConfig,
                         uint16_t functionMask,
                         serialPortFunction_e sharedWithFunction)
 {
