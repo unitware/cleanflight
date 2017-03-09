@@ -119,8 +119,6 @@
 //#define SONAR_TRIGGER_PIN_PWM   PB8
 //#define SONAR_ECHO_PIN_PWM      PB9
 
-#define TELEMETRY_IBUS
-
 #define USE_UART1
 #define USE_UART2
 /* only 2 uarts available on the NAZE, add ifdef here if present on other boards */
@@ -155,7 +153,7 @@
 
 #undef GPS
 
-#define SPEKTRUM_BIND
+#undef SPEKTRUM_BIND
 // USART2, PA3
 #define BIND_PIN                PA3
 
