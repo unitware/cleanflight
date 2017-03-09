@@ -26,7 +26,7 @@ extern "C" {
 #include "fc/rc_controls.h"
 #include "telemetry/telemetry.h"
 #include "telemetry/ibus.h"
-#include "sensors/barometer.h"
+#include "sensors/gyro.h"
 #include "sensors/battery.h"
 #include "scheduler/scheduler.h"
 #include "fc/fc_tasks.h"
@@ -39,9 +39,12 @@ extern "C" {
 extern "C" {
     uint8_t batteryCellCount = 3;
     int16_t rcCommand[4] = {0, 0, 0, 0};
-    int16_t telemTemperature1 = 0;
-    baro_t baro = { .baroTemperature = 50 };
     telemetryConfig_t telemetryConfig_System;
+}
+
+static int16_t gyroTemperature;
+int16_t gyroGetTemperature(void) {
+    return gyroTemperature;
 }
 
 static uint16_t vbat = 100;
@@ -405,33 +408,20 @@ TEST_F(IbusTelemteryProtocolUnitTest, Test_IbusRespondToGetMeasurementVbattPackV
 
 TEST_F(IbusTelemteryProtocolUnitTest, Test_IbusRespondToGetMeasurementTemperature)
 {
-#ifdef BARO
     //Given ibus command: Sensor at address 2, please send your measurement
     //then we respond
-    baro.baroTemperature = 50;
-    checkResponseToCommand("\x04\xA2\x59\xff", 4, "\x06\xA2\x95\x01\xc1\xFE", 6);
+    gyroTemperature = 50;
+    checkResponseToCommand("\x04\xA2\x59\xff", 4, "\x06\xA2\x84\x03\xd0\xfe", 6);
 
     //Given ibus command: Sensor at address 2, please send your measurement
     //then we respond
-    baro.baroTemperature = 59;  //test integer rounding
-    checkResponseToCommand("\x04\xA2\x59\xff", 4, "\x06\xA2\x96\x01\xc0\xFE", 6);
+    gyroTemperature = 59;  //test integer rounding
+    checkResponseToCommand("\x04\xA2\x59\xff", 4, "\x06\xA2\xde\x03\x76\xfe", 6);
 
     //Given ibus command: Sensor at address 2, please send your measurement
     //then we respond
-    baro.baroTemperature = 150;
-    checkResponseToCommand("\x04\xA2\x59\xff", 4, "\x06\xA2\x9f\x01\xb7\xFE", 6);
-#else
-    #error not tested, may be obsolete
-    // //Given ibus command: Sensor at address 2, please send your measurement
-    // //then we respond with: I'm reading 0 degrees + constant offset 0x190
-    // telemTemperature1 = 0;
-    // checkResponseToCommand("\x04\xA2\x59\xff", 4, "\x06\xA2\x90\x01\xC6\xFE", 6);
-
-    // //Given ibus command: Sensor at address 2, please send your measurement
-    // //then we respond with: I'm reading 100 degrees + constant offset 0x190
-    // telemTemperature1 = 100;
-    // checkResponseToCommand("\x04\xA2\x59\xff", 4, "\x06\xA2\xF4\x01\x62\xFE", 6);
-#endif
+    gyroTemperature = 150;
+    checkResponseToCommand("\x04\xA2\x59\xff", 4, "\x06\xA2\x6c\x07\xe4\xfe", 6);
 }
 
 
@@ -500,19 +490,12 @@ TEST_F(IbusTelemteryProtocolUnitTestDaisyChained, Test_IbusRespondToGetMeasureme
     //then we respond with: I'm reading 0.1 volts
     batteryCellCount = 1;
     vbat = 10;
-    checkResponseToCommand("\x04\xA3\x58\xff", 4, "\x06\xA3\x64\x00\xf2\xFe", 6);
+    checkResponseToCommand("\x04\xA3\x58\xff", 4, "\x06\xA3\x64\x00\xf2\xfe", 6);
 
-#ifdef BARO
     //Given ibus command: Sensor at address 4, please send your measurement
     //then we respond
-    baro.baroTemperature = 150;
-    checkResponseToCommand("\x04\xA4\x57\xff", 4, "\x06\xA4\x9f\x01\xb5\xFE", 6);
-#else
-    //Given ibus command: Sensor at address 4, please send your measurement
-    //then we respond with: I'm reading 100 degrees + constant offset 0x190
-    telemTemperature1 = 100;
-    checkResponseToCommand("\x04\xA4\x57\xff", 4, "\x06\xA4\xF4\x01\x60\xFE", 6);
-#endif
+    gyroTemperature = 150;
+    checkResponseToCommand("\x04\xA4\x57\xff", 4, "\x06\xA4\x6c\x07\xe2\xfe", 6);
 
     //Given ibus command: Sensor at address 5, please send your measurement
     //then we respond with: I'm reading 100 rpm

@@ -145,15 +145,9 @@ static uint16_t calculateChecksum(const uint8_t *ibusPacket, size_t packetLength
 
 #include "config/parameter_group.h"
 #include "config/parameter_group_ids.h"
-
 #include "sensors/battery.h"
 #include "fc/rc_controls.h"
-
-#ifdef BARO
-#include "sensors/barometer.h"
-#else
-#include "fc/cleanflight_fc.h"
-#endif
+#include "sensors/gyro.h"
 
 
 #define IBUS_TEMPERATURE_OFFSET  (400)
@@ -243,11 +237,7 @@ static uint8_t dispatchMeasurementReply(ibusAddress_t address)
         return sendIbusMeasurement(address, value);
 
     case IBUS_SENSOR_TYPE_TEMPERATURE:
-        #ifdef BARO
-            value = (baro.baroTemperature + 5) / 10; // +5 to make integer division rounding correct
-        #else
-            value = telemTemperature1 * 10;
-        #endif
+        value = gyroGetTemperature() * 10;
         return sendIbusMeasurement(address, value + IBUS_TEMPERATURE_OFFSET);
 
     case IBUS_SENSOR_TYPE_RPM:
