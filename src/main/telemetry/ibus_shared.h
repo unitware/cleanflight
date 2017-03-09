@@ -38,7 +38,7 @@ void initSharedIbusTelemetry(serialPort_t * port);
 #endif //defined(TELEMETRY) && defined(TELEMETRY_IBUS)
 
 
-bool isChecksumOk(const uint8_t *ibusPacket, const uint8_t length);
+bool isChecksumOkIa6b(const uint8_t *ibusPacket, const uint8_t length);
 
 
 

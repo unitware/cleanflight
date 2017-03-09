@@ -69,7 +69,7 @@ static uint32_t ibusChannelData[IBUS_MAX_CHANNEL];
 static uint8_t ibus[IBUS_BUFFSIZE] = { 0, };
 
 
-static bool isValidIbusPacketLength(uint8_t length)
+static bool isValidIa6bIbusPacketLength(uint8_t length)
 {
     return (length == IBUS_TELEMETRY_PACKET_LENGTH) || (length == IBUS_SERIAL_RX_PACKET_LENGTH);
 }
@@ -87,9 +87,7 @@ static void ibusDataReceive(uint16_t c)
     if ((ibusTime - ibusTimeLast) > IBUS_FRAME_GAP) {
         ibusFramePosition = 0;
         rxBytesToIgnore = 0;
-    }
-
-    if (rxBytesToIgnore) {
+    } else if (rxBytesToIgnore) {
         rxBytesToIgnore--;
         return;
     }
@@ -97,7 +95,7 @@ static void ibusDataReceive(uint16_t c)
     ibusTimeLast = ibusTime;
 
     if (ibusFramePosition == 0) {
-        if (isValidIbusPacketLength(c)) {
+        if (isValidIa6bIbusPacketLength(c)) {
             ibusModel = IBUS_MODEL_IA6B;
             ibusSyncByte = c;
             ibusFrameSize = c;
@@ -123,11 +121,42 @@ static void ibusDataReceive(uint16_t c)
     }
 }
 
+
+static bool isChecksumOkIa6(void)
+{
+    uint8_t offset;
+    uint8_t i;
+    uint16_t chksum, rxsum;
+    chksum = ibusChecksum;
+    rxsum = ibus[ibusFrameSize - 2] + (ibus[ibusFrameSize - 1] << 8);
+    for (i = 0, offset = ibusChannelOffset; i < IBUS_MAX_CHANNEL; i++, offset += 2) {
+        chksum += ibus[offset] + (ibus[offset + 1] << 8);
+    }
+    return chksum == rxsum;
+}
+
+
+static bool checksumIsOk(void) {
+    if (ibusModel == IBUS_MODEL_IA6 ) {
+        return isChecksumOkIa6();
+    } else {
+        return isChecksumOkIa6b(ibus, ibusFrameSize);
+    }
+}
+
+
+static void updateChannelData(void) {
+    uint8_t i;
+    uint8_t offset;
+
+    for (i = 0, offset = ibusChannelOffset; i < IBUS_MAX_CHANNEL; i++, offset += 2) {
+        ibusChannelData[i] = ibus[offset] + (ibus[offset + 1] << 8);
+    }
+}
+
 static uint8_t ibusFrameStatus(void)
 {
-    uint8_t i, offset;
     uint8_t frameStatus = RX_FRAME_PENDING;
-    uint16_t chksum, rxsum;
 
     if (!ibusFrameDone) {
         return frameStatus;
@@ -135,27 +164,13 @@ static uint8_t ibusFrameStatus(void)
 
     ibusFrameDone = false;
 
-    chksum = ibusChecksum;
-    rxsum = ibus[ibusFrameSize - 2] + (ibus[ibusFrameSize - 1] << 8);
-    if (ibusModel == IBUS_MODEL_IA6) {
-        for (i = 0, offset = ibusChannelOffset; i < IBUS_MAX_CHANNEL; i++, offset += 2)
-            chksum += ibus[offset] + (ibus[offset + 1] << 8);
-    } else {
-        for (i = 0; i < ibusFrameSize - IBUS_CHECKSUM_SIZE; i++)
-            chksum -= ibus[i];
-    }
-
-    if (chksum == rxsum) {
+    if (checksumIsOk()) {
         if (ibusModel == IBUS_MODEL_IA6 || ibusSyncByte == 0x20) {
-            //serial rx
-            for (i = 0, offset = ibusChannelOffset; i < IBUS_MAX_CHANNEL; i++, offset += 2) {
-                ibusChannelData[i] = ibus[offset] + (ibus[offset + 1] << 8);
-            }
+            updateChannelData();
             frameStatus = RX_FRAME_COMPLETE;
         }
         else
         {
-            //telemetry
 #if defined(TELEMETRY) && defined(TELEMETRY_IBUS)
             rxBytesToIgnore = respondToIbusRequest(ibus);
 #endif

@@ -147,7 +147,7 @@ void serialTestResetPort()
 
 
 static bool isChecksumOkReturnValue = true;
-bool isChecksumOk(const uint8_t *ibusPacket, const uint8_t length)
+bool isChecksumOkIa6b(const uint8_t *ibusPacket, const uint8_t length)
 {
     (void) ibusPacket;
     (void) length;
@@ -308,6 +308,7 @@ TEST_F(IbusRxProtocollUnitTest, Test_IA6B_OnePacketReceivedWithBadCrc)
                         0x0a, 0x33, 0x0b, 0x33, 0x0c, 0x33, 0x0d, 0x33,             //channel 11..14
                         0x00, 0x00}; //checksum
 
+    isChecksumOkReturnValue = false;
     for (size_t i=0; i < sizeof(packet); i++) {
         EXPECT_EQ(RX_FRAME_PENDING, rxRuntimeConfig.rcFrameStatusFn());
         stub_serialRxCallback(packet[i]);
