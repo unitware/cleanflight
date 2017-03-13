@@ -51,6 +51,7 @@ typedef struct telemetryConfig_s {
     uint8_t report_cell_voltage;
 } telemetryConfig_t;
 
+
 void telemetryInit(void);
 bool telemetryCheckRxPortShared(const serialPortConfig_t *portConfig);
 extern serialPort_t *telemetrySharedPort;
@@ -63,6 +64,6 @@ bool telemetryDetermineEnabledState(portSharing_e portSharing);
 
 void telemetryUseConfig(telemetryConfig_t *telemetryConfig);
 
-#define TELEMETRY_SHAREABLE_PORT_FUNCTIONS_MASK (FUNCTION_TELEMETRY_FRSKY | FUNCTION_TELEMETRY_LTM | FUNCTION_TELEMETRY_MAVLINK | FUNCTION_TELEMETRY_IBUS)
+#define TELEMETRY_SHAREABLE_PORT_FUNCTIONS_MASK (FUNCTION_TELEMETRY_FRSKY | FUNCTION_TELEMETRY_LTM | FUNCTION_TELEMETRY_MAVLINK)
 
 void releaseSharedTelemetryPorts(void);
