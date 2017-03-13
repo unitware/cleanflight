@@ -17,8 +17,6 @@
 
 #pragma once
 
-#define TELEMETRY_IBUS
-
 #if defined(RMDO)
 #define TARGET_BOARD_IDENTIFIER "RMDO"
 #elif defined(ZCOREF3)
