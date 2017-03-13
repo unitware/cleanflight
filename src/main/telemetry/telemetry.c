@@ -34,7 +34,7 @@
 #include "fc/config.h"
 #include "fc/rc_controls.h"
 #include "fc/runtime_config.h"
-
+#include "config/config_master.h"
 #include "msp/msp_serial.h"
 
 #include "rx/rx.h"
